@@ -416,6 +416,9 @@ public class CartridgeNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
                         "schemes": schemes,
                         "jit": (lc["isJITNeeded"] as? Bool) ?? false,
                         "container": (lc["LCDataUUID"] as? String) ?? "",
+                        // The JIT script picked for this app in LiveContainer (base64 JS). StikDebug needs it
+                        // on devices where JIT has to be enabled by a script.
+                        "jitScript": (lc["jitLaunchScriptJs"] as? String) ?? "",
                     ]
                     // The app's own Documents (where emulators keep their games), readable from inside LiveContainer.
                     if let uuid = lc["LCDataUUID"] as? String, !uuid.isEmpty {

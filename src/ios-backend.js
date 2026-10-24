@@ -2376,8 +2376,10 @@ function stikLcScheme() {
 // Links that reach StikDebug, in the order to try them. "auto" tries a StikDebug installed with
 // SideStore first (iOS refuses the link at once when there is none) and then the shared copy
 // inside LiveContainer, which LiveContainer finds by its stikjit:// scheme.
-function stikUrls(e) {
-  let t = e ? `stikjit://enable-jit?bundle-id=${encodeURIComponent(e)}` : `stikjit://`,
+function stikUrls(e, s) {
+  let t = e
+      ? `stikjit://enable-jit?bundle-id=${encodeURIComponent(e)}${s ? `&script-data=${encodeURIComponent(s)}` : ``}`
+      : `stikjit://`,
     n = `${stikLcScheme()}://open-url?url=${encodeURIComponent(b64(t))}`,
     r = iosCfg().stikdebug || `auto`;
   return r === `livecontainer` ? [n] : r === `sidestore` ? [t] : [t, n];
@@ -2432,6 +2434,7 @@ function resolveTarget(e, t, n) {
       lcBundle: e.lcBundle || (a ? a.bundleName : `${i}.app`),
       container: e.container || (a ? a.container : ``),
       lcScheme: e.lcScheme || (inLC() ? ownLcScheme() : `livecontainer`),
+      jitScript: (a && a.jitScript) || ``,
       icon: a && a.icon,
       detected: !!a,
     };
@@ -2524,7 +2527,8 @@ async function planLaunch(e, { jit: t, link: n, key: r, name: i }) {
       return {
         error: `StikDebug can’t run in the same LiveContainer as Cartridge. Install a second LiveContainer (or turn on multitasking) and pick it under Settings › Emulators › StikDebug.`,
       };
-    return { urls: stikUrls(s.lcMainBundleId || `com.kdt.livecontainer`), stik: !0 };
+    // Same request LiveContainer's own StikDebug option sends, including the app's JIT script.
+    return { urls: stikUrls(s.lcMainBundleId || `com.kdt.livecontainer`, e.jitScript), stik: !0 };
   }
   if (!t || e.where === `appstore`)
     return n ? { url: n } : e.scheme ? { url: `${e.scheme}://` } : { bundleId: e.bundleId };
