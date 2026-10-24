@@ -1,0 +1,18 @@
+{
+  "name": "cartridge-ios",
+  "private": true,
+  "version": "0.4.9",
+  "description": "iOS port of the Cartridge frontend (personal build).",
+  "license": "MIT",
+  "scripts": {
+    "build:web": "node tools/build-web.mjs",
+    "sync": "node tools/build-web.mjs && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

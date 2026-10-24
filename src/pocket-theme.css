@@ -1,0 +1,185 @@
+/* Pocket — a clean, light studio theme: dotted backdrop, monospace labels, small rounded pills. */
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(./space-mono-latin-400-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(./space-mono-latin-700-normal.woff2) format("woff2");
+}
+
+:root[data-theme="pocket"] {
+  --font-ui: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-pixel: "Space Mono", ui-monospace, monospace;
+  --bg: #e4e4e4;
+  --bg-2: #d9d9d9;
+  --panel: #f7f7f7e6;
+  --panel-solid: #f4f4f4;
+  --surface: #1111110d;
+  --surface-2: #11111117;
+  --line: #11111114;
+  --line-2: #11111124;
+  --text: #141414;
+  --text-2: #141414b0;
+  --text-3: #14141470;
+  --focus: #141414;
+  --shadow: 0 0.4rem 1.2rem #0000001f;
+  --accent: #141414;
+  --accent-ink: #fff;
+  --radius: 0.55rem;
+  --radius-lg: 0.8rem;
+  --pocket-dot: #ffffffd9;
+  --pocket-pill: #f6f6f6;
+  --pocket-pill-dark: #121212;
+  color-scheme: light;
+}
+
+:root[data-theme="pocket"] body,
+:root[data-theme="pocket"] #root {
+  background:
+    radial-gradient(circle at center, var(--pocket-dot) 0 1.1px, transparent 1.6px) 0 0 / 1.35rem 1.35rem,
+    linear-gradient(180deg, #ececec 0%, #dcdcdc 100%);
+  letter-spacing: -0.01em;
+}
+
+/* Backdrop: the dots only — no artwork wash, grain, ghost lettering or visualizer. */
+:root[data-theme="pocket"] .bg > :not(.bg__base),
+:root[data-theme="pocket"] .viz,
+:root[data-theme="pocket"] .home__ghost {
+  display: none !important;
+}
+:root[data-theme="pocket"] .bg,
+:root[data-theme="pocket"] .bg__base {
+  background: transparent !important;
+}
+
+/* Pills: flat, light grey, small radius, monospace. */
+:root[data-theme="pocket"] .pill,
+:root[data-theme="pocket"] .chip,
+:root[data-theme="pocket"] .hint {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  background: #cfcfcfb3;
+  color: var(--text);
+  border: 0;
+  border-radius: 0.5rem;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-theme="pocket"] .hint {
+  padding: 0.3rem 0.65rem 0.3rem 0.35rem;
+  gap: 0.4rem;
+}
+:root[data-theme="pocket"] .chip.warn {
+  background: #f3d7a6cc;
+  color: #5b3b00;
+}
+
+/* Controller glyphs: black discs with white letters. */
+:root[data-theme="pocket"] .glyph--pad {
+  background: var(--pocket-pill-dark) !important;
+  color: #fff !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+
+/* Top bar: black clock pill, black status pill, no wordmark. */
+:root[data-theme="pocket"] .topbar__left {
+  visibility: hidden;
+}
+:root[data-theme="pocket"] .topbar__clock,
+:root[data-theme="pocket"] .topbar__pad {
+  background: var(--pocket-pill-dark);
+  color: #fff;
+  border-radius: 0.45rem;
+  padding: 0.2rem 0.55rem;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+:root[data-theme="pocket"] .topbar__clock {
+  position: absolute;
+  left: var(--gutter);
+}
+:root[data-theme="pocket"] .topbar__pad {
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  width: auto;
+}
+:root[data-theme="pocket"] .topbar__pad svg {
+  color: #fff;
+}
+
+/* The selected title sits in a white pill under the cartridge. */
+:root[data-theme="pocket"] .sys-info__name,
+:root[data-theme="pocket"] .display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+:root[data-theme="pocket"] .sys-info__name {
+  display: inline-block;
+  justify-self: center;
+  align-self: center;
+  margin: 0 auto;
+  width: auto;
+  background: #fff;
+  border-radius: 0.55rem;
+  padding: 0.25rem 0.9rem;
+  font-size: 1.35rem;
+  box-shadow: 0 0.15rem 0.6rem #0000000f;
+}
+:root[data-theme="pocket"] .sys-dots i {
+  background: #00000026;
+}
+:root[data-theme="pocket"] .sys-dots i.is-on {
+  background: var(--pocket-pill-dark);
+}
+
+/* Home: one quiet row of tappable pills along the bottom, like a handheld launcher.
+   The controller hint row is dropped there (the pills do the same jobs). */
+:root[data-theme="pocket"] .home .hints {
+  display: none;
+}
+:root[data-theme="pocket"] .home__actions {
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem var(--gutter) max(0.7rem, env(safe-area-inset-bottom));
+}
+:root[data-theme="pocket"] .home__actions .pill {
+  height: auto;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.95rem;
+}
+:root[data-theme="pocket"] .home__actions .pill:last-child {
+  margin-left: auto;
+}
+:root[data-theme="pocket"] .hints {
+  padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
+}
+:root[data-theme="pocket"] .sys-info__name::before {
+  content: "A";
+  display: inline-grid;
+  place-items: center;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.45em;
+  border-radius: 50%;
+  background: var(--pocket-pill-dark);
+  color: #fff;
+  font-size: 0.62em;
+  font-weight: 700;
+  vertical-align: 0.18em;
+}

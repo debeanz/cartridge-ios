@@ -1,0 +1,14 @@
+{
+  "name": "cartridge",
+  "productName": "Cartridge",
+  "version": "0.4.9",
+  "description": "A controller-first emulation frontend for macOS with an Onion-style game switcher.",
+  "author": "Isaiah",
+  "license": "MIT",
+  "main": "electron/main.js",
+  "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@fontsource-variable/open-sans": "^5.3.0",
+    "@fontsource-variable/roboto": "^5.3.0"
+  }
+}
