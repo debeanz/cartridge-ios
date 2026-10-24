@@ -14,8 +14,7 @@ class CartridgeViewController: CAPBridgeViewController {
         webView?.isOpaque = false
     }
 
-    override var prefersStatusBarHidden: Bool { true }
-    override var prefersHomeIndicatorAutoHidden: Bool { true }
+    // Status bar and home indicator are hidden through Capacitor's SystemBars config (capacitor.config.json).
     override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
 }
 

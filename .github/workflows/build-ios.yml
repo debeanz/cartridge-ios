@@ -42,8 +42,9 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tee xcodebuild.log | grep -E "error:|warning: .*CartridgeNative|BUILD (SUCCEEDED|FAILED)" || true
-          test -d build/Build/Products/Release-iphoneos/App.app
+            build > xcodebuild.log 2>&1 || { grep -E "error:" xcodebuild.log | sort -u; exit 1; }
+          grep -E "error:" xcodebuild.log | sort -u || true
+          test -x build/Build/Products/Release-iphoneos/App.app/App
 
       - name: Package IPA
         run: |
