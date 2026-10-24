@@ -2184,6 +2184,7 @@ var IOS_EMUS = {
   },
   ppsspp: {
     name: `PPSSPP`,
+    scan: [`psp`],
     systems: [`psp`],
     schemes: [`ppsspp`],
     bundleIds: [`org.ppsspp.ppsspp`],
@@ -2194,6 +2195,7 @@ var IOS_EMUS = {
   },
   melonx: {
     name: `MeloNX`,
+    scan: [`switch`],
     systems: [`switch`],
     schemes: [`melonx`, `atariemulator`],
     bundleIds: [`com.stossy11.MeloNX`, `com.nur.nx`],
@@ -2207,6 +2209,7 @@ var IOS_EMUS = {
   },
   armsx2: {
     name: `ARMSX2`,
+    scan: [`ps2`],
     systems: [`ps2`],
     schemes: [`armsx2`, `armsx2-ios`, `armsx2ios`],
     bundleIds: [`com.armsx2.ios`, `com.armsx2.ios.nightly`],
@@ -2219,6 +2222,7 @@ var IOS_EMUS = {
   },
   play: {
     name: `Play!`,
+    scan: [`ps2`],
     systems: [`ps2`],
     schemes: [],
     bundleIds: [`com.virtualapplications.play`],
@@ -2237,6 +2241,7 @@ var IOS_EMUS = {
   },
   flycast: {
     name: `Flycast`,
+    scan: [`dreamcast`],
     systems: [`dreamcast`, `arcade`],
     schemes: [],
     bundleIds: [`com.flyinghead.Flycast`],
@@ -2245,6 +2250,7 @@ var IOS_EMUS = {
   },
   azahar: {
     name: `Azahar`,
+    scan: [`n3ds`],
     systems: [`n3ds`],
     schemes: [],
     bundleIds: [`org.azahar-emu.azahar`],
@@ -2254,6 +2260,7 @@ var IOS_EMUS = {
   },
   xenios: {
     name: `XeniOS`,
+    scan: [`xbox360`],
     systems: [`xbox360`],
     schemes: [`xenios`],
     bundleIds: [`jp.xenios.xenios`],
@@ -2366,11 +2373,19 @@ function stikLcScheme() {
   return e !== `auto` ? e : inLC() && ownLcScheme() === `livecontainer` ? `livecontainer2` : `livecontainer`;
 }
 
+// Links that reach StikDebug, in the order to try them. "auto" tries a StikDebug installed with
+// SideStore first (iOS refuses the link at once when there is none) and then the shared copy
+// inside LiveContainer, which LiveContainer finds by its stikjit:// scheme.
+function stikUrls(e) {
+  let t = e ? `stikjit://enable-jit?bundle-id=${encodeURIComponent(e)}` : `stikjit://`,
+    n = `${stikLcScheme()}://open-url?url=${encodeURIComponent(b64(t))}`,
+    r = iosCfg().stikdebug || `auto`;
+  return r === `livecontainer` ? [n] : r === `sidestore` ? [t] : [t, n];
+}
+
 function stikUrl(e) {
-  let t = `stikjit://enable-jit?bundle-id=${encodeURIComponent(e)}`;
-  return iosCfg().stikdebug === `livecontainer`
-    ? `${stikLcScheme()}://open-url?url=${encodeURIComponent(b64(t))}`
-    : t;
+  let t = stikUrls(e);
+  return t.length > 1 && U && U.found && !U.found.found[`scheme:stikjit`] && inLC() ? t[1] : t[0];
 }
 
 // ---- where is it installed? ----------------------------------------------
@@ -2383,11 +2398,17 @@ async function lcAppList() {
   return (lcAppsCache = { at: Date.now(), apps: e.apps || [] }).apps;
 }
 
-function matchLc(e, t) {
-  let n = (t || []).map((e) => e.toLowerCase());
+// Finds an app inside LiveContainer: by bundle ID, then by the URL schemes it declares
+// (builds of the same emulator often use different IDs), then by its name.
+function matchLc(e, t, n = [], r = ``) {
+  let i = (t || []).filter(Boolean).map((e) => e.toLowerCase()),
+    a = n.map((e) => e.toLowerCase()),
+    o = r.toLowerCase().replace(/[^a-z0-9]/g, ``);
   return (
-    e.find((e) => n.includes(e.bundleId.toLowerCase())) ||
-    e.find((e) => n.some((t) => e.bundleId.toLowerCase().startsWith(t))) ||
+    e.find((e) => i.includes(e.bundleId.toLowerCase())) ||
+    e.find((e) => i.some((t) => e.bundleId.toLowerCase().startsWith(t))) ||
+    (a.length && e.find((e) => (e.schemes || []).some((e) => a.includes(e.toLowerCase())))) ||
+    (o.length > 2 && e.find((e) => e.name.toLowerCase().replace(/[^a-z0-9]/g, ``).startsWith(o))) ||
     null
   );
 }
@@ -2396,7 +2417,10 @@ function matchLc(e, t) {
 function resolveTarget(e, t, n) {
   let r = e.install || `auto`,
     i = e.bundleId || (t.bundleIds || [])[0] || ``,
-    a = n.lc && matchLc(n.lc, [i, ...(t.bundleIds || [])]),
+    a =
+      n.lc &&
+      ((e.lcBundle && n.lc.find((t) => t.bundleName === e.lcBundle)) ||
+        matchLc(n.lc, [e.bundleId, ...(t.bundleIds || [])], e.lcBundle ? [] : t.schemes || [], e.lcBundle ? `` : t.name || ``)),
     o = (t.schemes || []).some((e) => n.found[`scheme:${e}`]),
     s = [i, ...(t.bundleIds || [])].some((e) => e && n.found[`bundle:${realBundleId(e)}`]),
     c = r === `auto` ? (a ? `livecontainer` : o || s ? `sidestore` : null) : r;
@@ -2500,12 +2524,12 @@ async function planLaunch(e, { jit: t, link: n, key: r, name: i }) {
       return {
         error: `StikDebug can’t run in the same LiveContainer as Cartridge. Install a second LiveContainer (or turn on multitasking) and pick it under Settings › Emulators › StikDebug.`,
       };
-    return { url: stikUrl(s.lcMainBundleId || `com.kdt.livecontainer`) };
+    return { urls: stikUrls(s.lcMainBundleId || `com.kdt.livecontainer`), stik: !0 };
   }
   if (!t || e.where === `appstore`)
     return n ? { url: n } : e.scheme ? { url: `${e.scheme}://` } : { bundleId: e.bundleId };
   let o = stikUrl(e.bundleId);
-  if (!n) return { url: o };
+  if (!n) return { urls: stikUrls(e.bundleId), stik: !0 };
   if (a.handoff === `shortcut`) {
     let e = `${o}\nwait ${a.handoffDelay || 3}\n${n}`;
     return {
@@ -2517,14 +2541,33 @@ async function planLaunch(e, { jit: t, link: n, key: r, name: i }) {
   if (s && Date.now() - s < 18e5) return { url: n, reused: !0 };
   return (
     (jitSessions[r] = Date.now()),
-    { url: o, toast: `${i} is starting with JIT. Come back to Cartridge and press A again to load the game.` }
+    {
+      urls: stikUrls(e.bundleId),
+      stik: !0,
+      toast: `${i} is starting with JIT. Come back to Cartridge and press A again to load the game.`,
+    }
   );
 }
 
 async function runPlan(e) {
   if (e.error) return { ok: !1, error: e.error };
-  let t = e.url ? await x.launch({ url: e.url }) : await x.launch({ bundleId: e.bundleId });
-  return t.ok && e.toast ? { ...t, note: e.toast } : t;
+  if (!e.urls) {
+    let t = e.url ? await x.launch({ url: e.url }) : await x.launch({ bundleId: e.bundleId });
+    return t.ok && e.toast ? { ...t, note: e.toast } : t;
+  }
+  for (let t of e.urls) {
+    let n = await x.launch({ url: t });
+    if (n.ok) return G(`opened`, t), e.toast ? { ...n, note: e.toast } : n;
+    G(`couldn’t open`, t);
+  }
+  return {
+    ok: !1,
+    error: e.stik
+      ? inLC()
+        ? `Couldn’t reach StikDebug. Inside LiveContainer it has to be a shared app, and a second LiveContainer (${stikLcScheme()}) has to be installed to run it — or install StikDebug with SideStore.`
+        : `Couldn’t reach StikDebug. Install it with SideStore, or set “StikDebug is installed” to LiveContainer.`
+      : `It didn’t open.`,
+  };
 }
 
 // ---- title IDs from emulators that share their game list ------------------
@@ -2735,7 +2778,7 @@ var Ot = `0.4.9-ios`,
     apps: [],
     views: {},
     ios: {
-      stikdebug: `sidestore`,
+      stikdebug: `auto`,
       stikLcScheme: `auto`,
       handoff: `twostep`,
       handoffDelay: 3,
@@ -2864,6 +2907,9 @@ async function Bt() {
       }
     (R = N(R, { migrated: { labelIndex: !0 } })), K(), Lt();
   }
+  // 0.4.9-ios builds before "Find automatically" saved SideStore as the StikDebug default.
+  R.migrated && R.migrated.stikAuto ||
+    ((R = N(R, { ios: { stikdebug: `auto` }, migrated: { stikAuto: !0 } })), K());
   if (I.preview) {
     let e = new URLSearchParams(location.search);
     e.get(`theme`) && (R.ui.theme = e.get(`theme`)),
@@ -2987,9 +3033,28 @@ async function Ut() {
 async function Z(e) {
   return await Ht(), I.allFiles ? !0 : ((H = e), await x.requestAllFiles(), !1);
 }
+// Inside LiveContainer, emulators installed next to Cartridge keep their games in their own
+// Documents, which Cartridge can read: those folders are scanned too.
+async function emulatorFolders() {
+  if (!inLC() || iosCfg().scanEmulators === !1) return {};
+  let e = await detect(!0),
+    t = {};
+  for (let [n, r] of Object.entries(IOS_EMUS)) {
+    if (!r.scan) continue;
+    let i = emuState(n, e).target,
+      a = i && i.where === `livecontainer` && e.lc.find((e) => e.bundleName === i.lcBundle);
+    if (a && a.dataPath) for (let e of r.scan) (t[e] ||= []).push(a.dataPath);
+  }
+  return t;
+}
+
 async function Q() {
   if (!(await Z(`scan`))) return Object.values(z.games);
-  let e = await Be(R, z.games);
+  let t = await emulatorFolders(),
+    n = { ...R.systemFolders };
+  for (let [e, r] of Object.entries(t)) n[e] = [...new Set([...(n[e] || []), ...r])];
+  Object.keys(t).length && G(`emulator folders`, JSON.stringify(t));
+  let e = await Be({ ...R, systemFolders: n }, z.games);
   return (
     (z = { ...z, games: e, scannedAt: Date.now() }),
     mergeAppGames(),
@@ -3329,6 +3394,30 @@ function iosRows(e, t) {
         label: `Cartridge is running`,
         value: e.inLiveContainer ? `Inside LiveContainer (${e.lcScheme})` : `On its own (SideStore / AltStore)`,
       }),
+      e.inLiveContainer &&
+        p.push({
+          type: `info`,
+          label: `LiveContainer apps Cartridge sees`,
+          value: ((a && a.lc) || []).length
+            ? (a.lc || []).map((e) => `${e.name}${e.shared ? ` (shared)` : ``}`).join(`, `)
+            : `None — Cartridge reads LiveContainer’s app folder; check LiveContainer is up to date`,
+        }),
+      e.inLiveContainer &&
+        p.push({
+          key: `ios-scanemu`,
+          type: `toggle`,
+          label: `Find games inside LiveContainer emulators`,
+          desc: `Adds the games already in PPSSPP, MeloNX, ARMSX2, Play!, Azahar, Flycast and XeniOS when they’re in this LiveContainer.`,
+          value: u.scanEmulators !== !1,
+          change: () => d({ scanEmulators: u.scanEmulators === !1 }).then(() => $t.scan()),
+        }),
+      p.push({
+        type: `info`,
+        label: `Your own game folder`,
+        value: e.inLiveContainer
+          ? `Files › LiveContainer › Data › Application › ${e.container || `(Cartridge’s folder)`} › Documents › ROMs › <system>`
+          : `Files › On My iPhone › Cartridge › ROMs › <system>`,
+      }),
       p.push({
         key: `ios-team`,
         type: `button`,
@@ -3351,16 +3440,19 @@ function iosRows(e, t) {
         label: `StikDebug is installed`,
         desc:
           u.stikdebug === `livecontainer`
-            ? `In LiveContainer, as a shared app. Convert it to a shared app in LiveContainer (long-press › Convert to shared app).`
-            : `With SideStore / AltStore. Keep LocalDevVPN on and your pairing file in StikDebug.`,
+            ? `In LiveContainer, as a shared app (long-press it in LiveContainer › Convert to shared app).`
+            : u.stikdebug === `sidestore`
+              ? `With SideStore / AltStore. Keep LocalDevVPN on and your pairing file in StikDebug.`
+              : `Wherever it is: Cartridge tries StikDebug from SideStore first, then the shared copy in LiveContainer (${stikLcScheme()}).`,
         options: [
+          { value: `auto`, label: `Find automatically` },
           { value: `sidestore`, label: `SideStore / AltStore` },
           { value: `livecontainer`, label: `LiveContainer` },
         ],
-        value: u.stikdebug || `sidestore`,
+        value: u.stikdebug || `auto`,
         change: (e) => d({ stikdebug: e }),
       }),
-      u.stikdebug === `livecontainer` &&
+      u.stikdebug !== `sidestore` &&
         p.push({
           key: `ios-stiklc`,
           type: `choice`,
@@ -3417,11 +3509,7 @@ function iosRows(e, t) {
         icon2: `external`,
         act: () =>
           i(`ios-stikopen`, async () => {
-            let e =
-              u.stikdebug === `livecontainer`
-                ? `${stikLcScheme()}://open-url?url=${encodeURIComponent(b64(`stikjit://`))}`
-                : `stikjit://`;
-            let t = await x.launch({ url: e });
+            let t = await runPlan({ urls: stikUrls(null), stik: !0 });
             if (!t.ok) throw Error(t.error);
           }),
       });

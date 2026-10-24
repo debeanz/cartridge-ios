@@ -417,6 +417,12 @@ public class CartridgeNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
                         "jit": (lc["isJITNeeded"] as? Bool) ?? false,
                         "container": (lc["LCDataUUID"] as? String) ?? "",
                     ]
+                    // The app's own Documents (where emulators keep their games), readable from inside LiveContainer.
+                    if let uuid = lc["LCDataUUID"] as? String, !uuid.isEmpty {
+                        let docs = root.deletingLastPathComponent()
+                            .appendingPathComponent("Data/Application/\(uuid)/Documents")
+                        if self.fm.fileExists(atPath: docs.path) { entry["dataPath"] = docs.path }
+                    }
                     if let icon = Self.appIcon(bundle: app, info: info) {
                         let dest = (iconDir as NSString).appendingPathComponent("\(id).png")
                         if (try? icon.write(to: URL(fileURLWithPath: dest))) != nil { entry["icon"] = dest }
