@@ -2524,7 +2524,7 @@ async function gameLink(e, t) {
     else return { missing: `title` };
   }
   if (/\{(sha1|SHA1)\}/.test(i)) {
-    let e = await fileHash(t.path, `sha1`);
+    let e = t.sha1 || (await fileHash(t.path, `sha1`));
     (r.sha1 = e), (r.SHA1 = e.toUpperCase());
   }
   if (/\{(md5|MD5)\}/.test(i)) {
@@ -3106,6 +3106,47 @@ async function Z(e) {
 }
 // Inside LiveContainer, emulators installed next to Cartridge keep their games in their own
 // Documents, which Cartridge can read: those folders are scanned too.
+// Delta's folder in Files (picked once): its games, with Delta's own titles, on their console shelves.
+var DELTA_TYPES = { nes: `nes`, snes: `snes`, n64: `n64`, gbc: `gbc`, gba: `gba`, ds: `nds`, genesis: `genesis` };
+async function deltaGames() {
+  let e = emuCfg(`delta`).folder;
+  if (!e) return {};
+  let t = await x.deltaLibrary({ folder: e }).catch((e) => ({ ok: !1, error: e.message }));
+  if (!t.ok) return G(`delta`, t.error), {};
+  let n = {};
+  for (let r of t.games || []) {
+    if (!r.filename || !r.identifier) continue;
+    let i = S(r.filename),
+      a = (r.type.match(/game\.([a-z0-9]+)$/) || [])[1],
+      o = i === `gb` ? `gb` : DELTA_TYPES[a] || te(i);
+    if (!o || !m[o]) continue;
+    let s = C(t.gamesDir, r.filename),
+      c = Ce(r.name),
+      l = we(c.title);
+    n[je(s)] = {
+      id: je(s),
+      system: o,
+      path: s,
+      sysDir: t.gamesDir,
+      file: r.filename,
+      base: r.name,
+      title: c.title,
+      sortKey: l,
+      letter: Te(l),
+      region: c.region,
+      disc: c.disc,
+      flags: c.flags,
+      localArt: r.artwork && !/^https?:/.test(r.artwork) ? C(t.gamesDir, r.artwork) : null,
+      fav: !1,
+      playtime: 0,
+      plays: 0,
+      lastPlayed: 0,
+      sha1: r.identifier,
+    };
+  }
+  return G(`delta: ${Object.keys(n).length} games`), n;
+}
+
 async function emulatorFolders() {
   if (!inLC() || iosCfg().scanEmulators === !1) return {};
   let e = await detect(!0),
@@ -3126,6 +3167,10 @@ async function Q() {
   for (let [e, r] of Object.entries(t)) n[e] = [...new Set([...(n[e] || []), ...r])];
   Object.keys(t).length && G(`emulator folders`, JSON.stringify(t));
   let e = await Be({ ...R, systemFolders: n }, z.games);
+  for (let [t, n] of Object.entries(await deltaGames())) {
+    let r = z.games[t];
+    e[t] = r ? { ...n, ...Object.fromEntries(Ae.filter((e) => r[e] !== void 0).map((e) => [e, r[e]])) } : n;
+  }
   return (
     (z = { ...z, games: e, scannedAt: Date.now() }),
     mergeAppGames(),
@@ -3666,6 +3711,26 @@ function iosRows(e, t) {
               t.cancelled || (await f(e, { bundleId: t.value.trim(), lcBundle: o.where === `livecontainer` ? `${t.value.trim()}.app` : void 0 }));
             }),
         }),
+        e === `delta` &&
+          p.push({
+            key: `deltafolder`,
+            type: `button`,
+            label: `Delta · games folder`,
+            desc: r.folder
+              ? `Linked: ${r.folder.split(`/`).slice(-2).join(`/`)}. Delta’s games show up on their console shelves and stay in sync.`
+              : `Pick Files › On My iPhone › Delta once. Cartridge then reads Delta’s library by itself — names, systems and all.`,
+            button: r.folder ? `Change` : `Link`,
+            icon2: `folder`,
+            primary: !r.folder,
+            act: () =>
+              i(`deltafolder`, async () => {
+                let e = await x.pickFolder().catch(() => ({ cancelled: !0 }));
+                if (e.cancelled || !e.path) return;
+                let t = await x.deltaLibrary({ folder: e.path });
+                if (!t.ok) throw Error(t.error);
+                await f(`delta`, { folder: e.path }), await $t.scan();
+              }, `Delta linked`),
+          }),
         t.exportLibrary &&
           p.push({
             key: `imp:${e}`,

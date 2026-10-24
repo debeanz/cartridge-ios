@@ -3,6 +3,7 @@ import WebKit
 import CryptoKit
 import Capacitor
 import UniformTypeIdentifiers
+import SQLite3
 
 // Bridge view controller: registers the native plugin and keeps the UI edge to edge.
 class CartridgeViewController: CAPBridgeViewController {
@@ -70,6 +71,7 @@ public class CartridgeNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
         "info", "requestAllFiles", "listDir", "stat", "readText", "writeText", "writeBase64", "remove",
         "download", "httpText", "pickFolder", "pickFiles", "forgetFolder", "apps", "lcApps", "deviceApps",
         "launch", "launchApp", "openUrl", "openStore", "lcPrepareJIT", "hash", "prompt", "confirm", "choose", "share",
+        "deltaLibrary",
         "listApps", "drawIcons", "homeStatus", "setHome", "moveToBack", "exitApp",
         "secondScreenInfo", "secondScreenShow", "secondScreenHide", "secondScreenPost",
     ].map { CAPPluginMethod(name: $0, returnType: CAPPluginReturnPromise) }
@@ -506,6 +508,52 @@ public class CartridgeNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
         if let url = call.getString("openUrl"), !url.isEmpty { defaults.set(url, forKey: "launchAppUrlScheme") }
         defaults.synchronize()
         call.resolve(["ok": true, "lcMainBundleId": HostEnvironment.lcMainBundleId ?? ""])
+    }
+
+    // MARK: - Delta's library (Files › On My iPhone › Delta, picked once by the player)
+
+    // Delta keeps its games as Database/Games/<SHA-1>.<ext> and their names in the Core Data
+    // store Database/Delta.sqlite (table ZGAME). The store is opened read-only.
+    @objc func deltaLibrary(_ call: CAPPluginCall) {
+        let folder = URL(fileURLWithPath: call.getString("folder") ?? "")
+        DispatchQueue.global(qos: .userInitiated).async {
+            let candidates = [folder.appendingPathComponent("Database"), folder]
+            guard let database = candidates.first(where: { self.fm.fileExists(atPath: $0.appendingPathComponent("Delta.sqlite").path) }) else {
+                return call.resolve(["ok": false, "error": "Delta.sqlite not found — pick the Delta folder under On My iPhone."])
+            }
+            let store = database.appendingPathComponent("Delta.sqlite").path
+            var db: OpaquePointer?
+            var rows: [[String: Any]] = []
+            for uri in ["file:\(store)?mode=ro", "file:\(store)?immutable=1"] {
+                db = nil
+                guard sqlite3_open_v2(uri, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil) == SQLITE_OK else { sqlite3_close(db); continue }
+                var stmt: OpaquePointer?
+                let sql = "SELECT ZNAME, ZIDENTIFIER, ZFILENAME, ZTYPE, ZARTWORKURL FROM ZGAME"
+                guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { sqlite3_close(db); continue }
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    func text(_ i: Int32) -> String {
+                        guard let p = sqlite3_column_text(stmt, i) else { return "" }
+                        return String(cString: p)
+                    }
+                    // type and artworkURL are archived values; the readable strings inside are enough.
+                    func blob(_ i: Int32) -> String {
+                        guard let p = sqlite3_column_blob(stmt, i) else { return text(i) }
+                        let data = Data(bytes: p, count: Int(sqlite3_column_bytes(stmt, i)))
+                        return String(decoding: data.map { $0 >= 32 && $0 < 127 ? $0 : 32 }, as: UTF8.self)
+                    }
+                    let type = blob(3).range(of: #"com\.rileytestut\.delta\.game\.[a-z0-9]+"#, options: .regularExpression)
+                        .map { String(blob(3)[$0]) } ?? ""
+                    let artText = blob(4)
+                    let art = artText.range(of: #"https?://[^\s]+"#, options: .regularExpression).map { String(artText[$0]) }
+                        ?? artText.range(of: #"[A-Za-z0-9_-]+\.(png|jpg|jpeg)"#, options: .regularExpression).map { String(artText[$0]) } ?? ""
+                    rows.append(["name": text(0), "identifier": text(1), "filename": text(2), "type": type, "artwork": art])
+                }
+                sqlite3_finalize(stmt)
+                sqlite3_close(db)
+                if !rows.isEmpty { break }
+            }
+            call.resolve(["ok": true, "games": rows, "gamesDir": database.appendingPathComponent("Games").path])
+        }
     }
 
     // MARK: - Hashes (Delta = SHA-1, Provenance = MD5, Manic EMU = SHA-256)
