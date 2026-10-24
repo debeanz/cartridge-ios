@@ -827,6 +827,22 @@ var p = [
       standalone: [],
       prefer: `standalone`,
     },
+    {
+      id: `deltalib`,
+      name: `Delta Library`,
+      short: `Delta`,
+      maker: `Delta`,
+      year: 2019,
+      color: `#7b5cf0`,
+      media: { type: `card`, shape: `switch` },
+      exts: [],
+      unique: [],
+      folders: [],
+      thumbs: null,
+      cores: [],
+      standalone: [`delta`],
+      prefer: `standalone`,
+    },
   ],
   m = Object.fromEntries(p.map((e) => [e.id, e])),
   h = (e) =>
@@ -2155,7 +2171,10 @@ var IOS_EMUS = {
     schemes: [`delta`],
     bundleIds: [`com.rileytestut.Delta`],
     game: `delta://game/{sha1}`,
-    note: `Import the game in Delta once — Cartridge opens it by its SHA-1.`,
+    // Delta's experimental "Library Export" sends the whole library (its IDs are the SHA-1s).
+    exportLibrary: `delta://gameInfo?scheme=cartridge`,
+    shelf: `deltalib`,
+    note: `Import the game in Delta once — Cartridge opens it by its SHA-1. Or import Delta’s list (turn on Delta › Settings › Experimental Features › Library Export).`,
   },
   provenance: {
     name: `Provenance`,
@@ -2303,6 +2322,7 @@ var IOS_ORDER = {
   ps2: [`armsx2`, `play`],
   n64: [`delta`, `manic`, `provenance`, `retroarch`],
   dreamcast: [`flycast`, `provenance`, `retroarch`],
+  deltalib: [`delta`],
 };
 
 // Streaming services on iOS (ids match the shared list in the UI).
@@ -2425,7 +2445,11 @@ function resolveTarget(e, t, n) {
         matchLc(n.lc, [e.bundleId, ...(t.bundleIds || [])], e.lcBundle ? [] : t.schemes || [], e.lcBundle ? `` : t.name || ``)),
     o = (t.schemes || []).some((e) => n.found[`scheme:${e}`]),
     s = [i, ...(t.bundleIds || [])].some((e) => e && n.found[`bundle:${realBundleId(e)}`]),
-    c = r === `auto` ? (a ? `livecontainer` : o || s ? `sidestore` : null) : r;
+    // Inside LiveContainer iOS only lets Cartridge check LiveContainer's own links, so apps
+    // installed normally (SideStore or App Store) can't be seen. Ones with a URL scheme are
+    // assumed to be there and simply opened; iOS says so if they aren't.
+    u = r === `auto` && !a && !o && !s && inLC() && (t.schemes || []).length > 0,
+    c = r === `auto` ? (a ? `livecontainer` : o || s || u ? `sidestore` : null) : r === `none` ? null : r;
   if (!c) return null;
   if (c === `livecontainer`)
     return {
@@ -2443,6 +2467,7 @@ function resolveTarget(e, t, n) {
     bundleId: c === `appstore` ? i : realBundleId(i),
     scheme: e.scheme || (t.schemes || [])[0] || ``,
     detected: o || s,
+    assumed: u,
   };
 }
 
@@ -2592,16 +2617,29 @@ async function importTitles(e, t) {
   } catch (e) {
     return G(`titles`, e.message), 0;
   }
-  let r = {};
-  for (let e of Array.isArray(n) ? n : n.games || []) {
-    let t = e.titleId || e.fileName || e.game;
-    t && ((r[titleKey(e.titleName || e.name || e.title)] = t), e.fileName && (r[titleKey(e.fileName)] = t));
+  let r = {},
+    i = [],
+    a = Array.isArray(n) ? n : n.games || [];
+  for (let n of a) {
+    let a = n.titleId || n.fileName || n.game,
+      o = n.titleName || n.name || n.title || a;
+    if (!a) continue;
+    (r[titleKey(o)] = a), n.fileName && (r[titleKey(n.fileName)] = a);
+    // Emulators with their own shelf (Delta) keep the whole list, cover art included.
+    let s = null;
+    if (IOS_EMUS[e] && IOS_EMUS[e].shelf && n.iconData) {
+      s = `${L.media}/lib/${e}/${String(a).replace(/[^a-zA-Z0-9_-]/g, `_`)}.png`;
+      await x.writeBase64({ path: s, data: n.iconData }).catch(() => (s = null));
+    }
+    i.push({ id: String(a), title: o, icon: s });
   }
   return (
     (R = N(R, { ios: { titles: { [e]: { ...((iosCfg().titles || {})[e] || {}), ...r } } } })),
+    IOS_EMUS[e] && IOS_EMUS[e].shelf && (R = { ...R, ios: { ...R.ios, libraries: { ...(R.ios.libraries || {}), [e]: i } } }),
     K(),
+    mergeAppGames(),
     F(`settings:changed`, R),
-    Object.keys(r).length
+    a.length
   );
 }
 
@@ -2654,6 +2692,35 @@ function appGames() {
       lastPlayed: 0,
       native: !0,
     };
+  }
+  // Games an emulator shared with "Import game list" (no file in Cartridge needed).
+  for (let [t, n] of Object.entries(iosCfg().libraries || {})) {
+    let r = IOS_EMUS[t];
+    if (!r || !r.shelf) continue;
+    for (let i of n) {
+      let n = `lib:${t}:${i.id}`;
+      e[n] = {
+        id: n,
+        system: r.shelf,
+        path: n,
+        sysDir: ``,
+        file: i.title,
+        base: i.title,
+        title: i.title,
+        sortKey: we(i.title),
+        letter: Te(we(i.title)),
+        region: null,
+        disc: null,
+        flags: [],
+        localArt: i.icon || null,
+        fav: !1,
+        playtime: 0,
+        plays: 0,
+        lastPlayed: 0,
+        native: !0,
+        linked: { emu: t, id: i.id },
+      };
+    }
   }
   return e;
 }
@@ -3153,10 +3220,15 @@ function Yt(e, t) {
     o = (e) => ({ ...i, kind: `none`, reason: e, fix: null });
   if (r !== `auto` && r !== `retroarch`)
     return a(r) || o(`${IOS_EMUS[r] ? IOS_EMUS[r].name : r} isn’t set up yet — Settings › Emulators.`);
-  for (let e of r === `retroarch` ? [`retroarch`] : n) {
-    let t = a(e);
-    if (t) return t;
+  // Emulators Cartridge actually found come first; ones it could only assume (see resolveTarget) after.
+  let s = r === `retroarch` ? [`retroarch`] : n,
+    c = null;
+  for (let e of s) {
+    let n = a(e);
+    if (n && !emuState(e, t).target.assumed) return n;
+    c ||= n;
   }
+  if (c) return c;
   return n.length
     ? o(`Install ${IOS_EMUS[n[0]].name} (through SideStore or in LiveContainer), then set it up in Settings › Emulators.`)
     : o(`No iOS emulator for ${e.short} yet.`);
@@ -3169,7 +3241,7 @@ async function $() {
     t[n] = {
       id: n,
       name: r.name,
-      app: i.target ? `${r.name} · ${whereLabel(i.target)}${i.target.detected ? `` : ` (not checked)`}` : null,
+      app: i.target ? `${r.name} · ${whereLabel(i.target)}${i.target.detected ? `` : i.target.assumed ? ` (assumed — can’t check from inside LiveContainer)` : ` (not checked)`}` : null,
       entry: i.target ? n : null,
       store: null,
       systems: r.systems,
@@ -3211,6 +3283,15 @@ async function Xt(e) {
   if ((await X(), B)) return { ok: !1, error: `A game is already running.` };
   let t = z.games[e];
   if (!t) return { ok: !1, error: `That game isn’t in the library any more — try a rescan.` };
+  if (t.linked) {
+    let n = IOS_EMUS[t.linked.emu],
+      r = emuState(t.linked.emu, await Kt());
+    if (!r.target) return { ok: !1, error: `Set up where ${n.name} is installed in Settings › Emulators.` };
+    let i = encodeURIComponent(t.linked.id),
+      a = fillTemplate(emuCfg(t.linked.emu).game || n.game, { sha1: i, SHA1: i, md5: i, MD5: i, titleId: i, manic: i }),
+      o = await planLaunch(r.target, { jit: r.jit, link: a, key: t.linked.emu, name: n.name });
+    return startSession(e, () => runPlan(o), { kind: `standalone`, emu: t.linked.emu, name: n.name });
+  }
   if (t.native) {
     let n = iosApps().find((t) => `app:${t.id}` === e);
     return n
@@ -3281,6 +3362,7 @@ var whereOptions = [
   { value: `auto`, label: `Find automatically` },
   { value: `sidestore`, label: `SideStore / AltStore` },
   { value: `livecontainer`, label: `LiveContainer` },
+  { value: `appstore`, label: `App Store` },
   { value: `none`, label: `Not installed` },
 ];
 
@@ -3546,7 +3628,7 @@ function iosRows(e, t) {
         label: t.name,
         tone: o ? `good` : `plain`,
         desc: o
-          ? `${whereLabel(o)}${o.detected ? `` : ` · not checked`} · ${o.where === `livecontainer` ? o.lcBundle : o.bundleId}${t.note ? ` — ${t.note}` : ``}`
+          ? `${whereLabel(o)}${o.detected ? `` : o.assumed ? ` · assumed (can’t check from inside LiveContainer)` : ` · not checked`} · ${o.where === `livecontainer` ? o.lcBundle : o.bundleId}${t.note ? ` — ${t.note}` : ``}`
           : `${t.systems.map((e) => (s.systems.find((t) => t.id === e) || {}).short || e).join(`, `)}${t.needsJit ? ` · needs JIT` : ``}`,
         options: whereOptions,
         value: r.install || `auto`,
